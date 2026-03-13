@@ -1,0 +1,402 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Sistema de Prontuário</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body{font-family:Arial;margin:0;background:#eef2f5}
+header{background:#1f2d3d;color:white;padding:16px;font-size:22px}
+.container{padding:20px}
+.tabs{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.tabs button{background:#3498db}
+input,textarea{width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #ccc}
+textarea{height:110px}
+button{margin-top:10px;padding:8px 12px;border:none;border-radius:6px;background:#16a085;color:white;cursor:pointer}
+.card{background:white;padding:10px;border-radius:6px;margin-top:10px;border:1px solid #ddd}
+.hidden{display:none}
+.btn-excluir{background:#e74c3c}
+.btn-editar{background:#f39c12}
+.btn-usar{background:#8e44ad}
+#pacienteAtual{padding:10px;background:#f4f4f4;font-weight:bold;margin-bottom:15px}
+</style>
+</head>
+
+<body>
+
+<header>Sistema de Prontuário</header>
+
+<div class="container">
+
+<div id="pacienteAtual">Paciente aberto: nenhum</div>
+
+<div class="tabs">
+<button onclick="novoPaciente();mostrarAba('novo')">Novo Paciente</button>
+<button onclick="mostrarAba('lista')">Lista de Pacientes</button>
+<button onclick="mostrarAba('prontuario')">Prontuário</button>
+<button onclick="mostrarAba('protocolos')">Protocolos</button>
+</div>
+
+<div id="aba_novo">
+
+<h3>Novo paciente</h3>
+
+<input id="nome" placeholder="Nome">
+<input id="idade" placeholder="Idade">
+<input id="sexo" placeholder="Sexo">
+<input id="numero_prontuario" placeholder="Número do prontuário">
+
+<button onclick="salvarPaciente()">Salvar paciente</button>
+
+</div>
+
+<div id="aba_lista" class="hidden">
+
+<h3>Pesquisar paciente</h3>
+
+<input id="buscar" placeholder="Pesquisar..." onkeyup="pesquisarPaciente()">
+
+<div id="lista"></div>
+
+</div>
+
+<div id="aba_prontuario" class="hidden">
+
+<h3>Prontuário</h3>
+
+<label>Anamnese</label>
+<textarea id="anamnese"></textarea>
+
+<label>Hipótese</label>
+<textarea id="hipotese"></textarea>
+
+<label>Exames</label>
+<textarea id="exames"></textarea>
+
+<label>Prescrição</label>
+<textarea id="prescricao"></textarea>
+
+<label>Conduta</label>
+<textarea id="conduta"></textarea>
+
+<button onclick="salvarProntuario()">Salvar prontuário</button>
+
+</div>
+
+<div id="aba_protocolos" class="hidden">
+
+<h3>Novo protocolo</h3>
+
+<input id="titulo_protocolo" placeholder="Título">
+
+<textarea id="conteudo_protocolo" placeholder="Conteúdo"></textarea>
+
+<button onclick="salvarProtocolo()">Salvar protocolo</button>
+
+<h3>Buscar protocolo</h3>
+
+<input id="buscar_protocolo" placeholder="Pesquisar..." onkeyup="filtrarProtocolos()">
+
+<div id="lista_protocolos"></div>
+
+</div>
+
+</div>
+
+<script>
+
+const SUPABASE_URL="https://dekksmllvgsxnumdiesz.supabase.co"
+const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRla2tzbWxsdmdzeG51bWRpZXN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTY0MDQsImV4cCI6MjA4ODkzMjQwNH0.aWy4XXoJkpoi9eNCBlVJK3fqwsWDKABWcqeMbXN4tw0"
+
+const {createClient}=supabase
+const client=createClient(SUPABASE_URL,SUPABASE_KEY)
+
+let pacientes=[]
+let pacienteAtual=null
+
+let protocolos=[]
+let protocoloEditando=null
+
+function mostrarAba(aba){
+
+document.getElementById("aba_novo").classList.add("hidden")
+document.getElementById("aba_lista").classList.add("hidden")
+document.getElementById("aba_prontuario").classList.add("hidden")
+document.getElementById("aba_protocolos").classList.add("hidden")
+
+document.getElementById("aba_"+aba).classList.remove("hidden")
+
+}
+
+function novoPaciente(){
+
+pacienteAtual=null
+
+document.getElementById("pacienteAtual").innerText="Paciente aberto: novo paciente"
+
+nome.value=""
+idade.value=""
+sexo.value=""
+numero_prontuario.value=""
+
+anamnese.value=""
+hipotese.value=""
+exames.value=""
+prescricao.value=""
+conduta.value=""
+
+}
+
+async function salvarPaciente(){
+
+const {data,error}=await client
+.from("pacientes")
+.insert([{nome:nome.value,idade:idade.value,sexo:sexo.value,prontuario:numero_prontuario.value}])
+.select()
+.single()
+
+if(error){
+console.log(error)
+alert("Erro ao salvar paciente")
+return
+}
+
+pacienteAtual=data.id
+
+document.getElementById("pacienteAtual").innerText="Paciente aberto: "+data.nome
+
+carregarPacientes()
+
+}
+
+async function carregarPacientes(){
+
+const {data,error}=await client
+.from("pacientes")
+.select("*")
+.order("nome",{ascending:true})
+
+if(error)return
+
+pacientes=data||[]
+
+}
+
+function pesquisarPaciente(){
+
+let termo=buscar.value.toLowerCase()
+
+lista.innerHTML=""
+
+pacientes.forEach(p=>{
+
+if(p.nome && p.nome.toLowerCase().includes(termo)){
+
+let div=document.createElement("div")
+div.className="card"
+
+div.innerHTML=`
+
+<b>${p.nome}</b><br>
+Idade: ${p.idade||""}<br>
+Sexo: ${p.sexo||""}<br>
+Prontuário: ${p.prontuario||""}
+
+<br><br>
+
+<button onclick="abrirPaciente(${p.id},'${p.nome}')">Abrir</button>
+<button class="btn-excluir" onclick="excluirPaciente(${p.id})">Excluir</button>
+
+`
+
+lista.appendChild(div)
+
+}
+
+})
+
+}
+
+async function abrirPaciente(id,nomePaciente){
+
+pacienteAtual=id
+
+document.getElementById("pacienteAtual").innerText="Paciente aberto: "+nomePaciente
+
+mostrarAba("prontuario")
+
+const {data}=await client
+.from("pacientes")
+.select("*")
+.eq("id",id)
+.single()
+
+anamnese.value=data.anamnese||""
+hipotese.value=data.hipotese||""
+exames.value=data.exames||""
+prescricao.value=data.prescricao||""
+conduta.value=data.conduta||""
+
+}
+
+async function salvarProntuario(){
+
+if(!pacienteAtual){
+alert("Selecione um paciente")
+return
+}
+
+const {error}=await client
+.from("pacientes")
+.update({
+anamnese:anamnese.value,
+hipotese:hipotese.value,
+exames:exames.value,
+prescricao:prescricao.value,
+conduta:conduta.value
+})
+.eq("id",pacienteAtual)
+
+if(error){
+alert("Erro ao salvar prontuário")
+return
+}
+
+alert("Prontuário salvo")
+
+}
+
+async function excluirPaciente(id){
+
+if(!confirm("Excluir paciente?"))return
+
+await client.from("pacientes").delete().eq("id",id)
+
+carregarPacientes()
+pesquisarPaciente()
+
+}
+
+async function carregarProtocolos(){
+
+const {data,error}=await client
+.from("protocolos")
+.select("*")
+.order("id",{ascending:false})
+
+if(error)return
+
+protocolos=data||[]
+
+renderProtocolos(protocolos)
+
+}
+
+function renderProtocolos(lista){
+
+lista_protocolos.innerHTML=""
+
+lista.forEach(p=>{
+
+let div=document.createElement("div")
+div.className="card"
+
+div.innerHTML=`
+
+<b>${p.titulo}</b>
+<br><br>
+${p.conteudo}
+
+<br><br>
+
+<button class="btn-usar" onclick="usarProtocolo(${p.id})">Usar no prontuário</button>
+<button class="btn-editar" onclick="editarProtocolo(${p.id})">Editar</button>
+<button class="btn-excluir" onclick="excluirProtocolo(${p.id})">Excluir</button>
+
+`
+
+lista_protocolos.appendChild(div)
+
+})
+
+}
+
+function filtrarProtocolos(){
+
+let termo=buscar_protocolo.value.toLowerCase()
+
+let filtrados=protocolos.filter(p=>p.titulo.toLowerCase().includes(termo))
+
+renderProtocolos(filtrados)
+
+}
+
+async function salvarProtocolo(){
+
+let titulo=titulo_protocolo.value
+let conteudo=conteudo_protocolo.value
+
+if(!titulo){alert("Digite um título");return}
+
+if(protocoloEditando){
+
+await client.from("protocolos").update({titulo,conteudo}).eq("id",protocoloEditando)
+protocoloEditando=null
+
+}else{
+
+await client.from("protocolos").insert([{titulo,conteudo}])
+
+}
+
+titulo_protocolo.value=""
+conteudo_protocolo.value=""
+
+carregarProtocolos()
+
+}
+
+function editarProtocolo(id){
+
+let p=protocolos.find(x=>x.id===id)
+
+titulo_protocolo.value=p.titulo
+conteudo_protocolo.value=p.conteudo
+
+protocoloEditando=id
+
+}
+
+async function excluirProtocolo(id){
+
+if(!confirm("Excluir protocolo?"))return
+
+await client.from("protocolos").delete().eq("id",id)
+
+carregarProtocolos()
+
+}
+
+function usarProtocolo(id){
+
+let p=protocolos.find(x=>x.id===id)
+
+mostrarAba("prontuario")
+
+anamnese.value += "\n\n"+p.conteudo
+
+}
+
+window.onload=()=>{
+
+carregarPacientes()
+carregarProtocolos()
+
+}
+
+</script>
+
+</body>
+</html>
